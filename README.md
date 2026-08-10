@@ -1,51 +1,84 @@
 # TGM Spatial Asset Demo
 
-A lightweight proof-of-concept for managing **land parcels, houses, and other property assets on an interactive map**.
+Prototype **Spatial Asset / Land Parcel Management System** untuk mengelola tanah, rumah, bangunan, dan aset lain langsung pada peta.
 
-This starter is intentionally simple:
+## Current Phase
 
-- no build tools
-- no npm install
-- no online database yet
-- data is saved to browser `localStorage`
-- geometry is stored as GeoJSON in the demo
-- a Supabase/PostGIS starter schema is included for the next development phase
+`ARCHITECTURE → MVP DEVELOPMENT`
 
-## Demo Features
+Demo tetap dapat berjalan tanpa database menggunakan browser `localStorage`, tetapi repository sekarang sudah disiapkan untuk **Supabase PostgreSQL + PostGIS**.
 
-- Interactive Leaflet map
-- OpenStreetMap and satellite basemap
-- Sample land parcels
-- Status classification:
-  - Available
-  - Reserved
-  - Sold
-- Asset filters
-- Click a polygon to see:
-  - asset code
-  - title
-  - asset type
-  - area
-  - price
-  - source
-- Draw new polygon or rectangle
-- Automatic approximate area calculation
-- Save new parcel in browser
-- Export all assets as GeoJSON
+## Current Features
 
-## Run on Windows
+- Leaflet interactive map
+- OpenStreetMap + satellite basemap
+- Asset types: Land, House, Building, Commercial
+- Status: Available, Reserved, Sold
+- Add asset by drawing polygon / rectangle
+- Click asset polygon to select it
+- Edit asset attributes
+- Edit polygon geometry by moving vertices
+- Automatic polygon area calculation
+- Filter assets
+- Export GeoJSON
+- Administrative boundary layer selector
+- Indonesian administrative hierarchy importer
+- Supabase/PostGIS schema with RLS and spatial indexes
 
-### Option A - simplest
+## Important Spatial Concept
 
-Open `index.html` in Chrome or Edge.
+Dua jenis geometry sengaja dipisahkan.
 
-Internet access is required because Leaflet and map tiles are loaded from public CDN/tile services.
+### 1. Administrative Region Geometry
 
-### Option B - recommended local server
+Referensi wilayah:
 
-Open **PowerShell** in this folder.
+```text
+Province
+  └─ Regency / City
+      └─ District
+          └─ Village
+```
 
-If Python is installed:
+User aplikasi **tidak mengedit** boundary administratif.
+
+### 2. Asset Geometry
+
+Geometry tanah/bangunan milik record `spatial_assets`.
+
+```text
+Spatial Asset Row
+  ├─ Asset Code
+  ├─ Type
+  ├─ Status
+  ├─ Price
+  ├─ Region
+  └─ Geometry (Polygon)
+```
+
+Geometry ini dapat dibuat dan diedit user.
+
+Flow edit:
+
+```text
+SELECT ASSET
+   ↓
+EDIT GEOMETRY
+   ↓
+MOVE POLYGON VERTICES
+   ↓
+SAVE
+   ↓
+CALCULATE AREA
+   ↓
+UPDATE ASSET GEOMETRY
+```
+
+Local demo menyimpan update ke `localStorage`. Production mode akan mengirim geometry GeoJSON ke Supabase/PostGIS.
+
+## Run Locally on Windows
+
+Open **PowerShell** inside the repository folder.
 
 ```powershell
 python -m http.server 5500
@@ -57,87 +90,98 @@ Then open:
 http://localhost:5500
 ```
 
-Expected result: the Spatial Asset Demo dashboard loads and shows several sample parcels.
+### Verify
 
-## Verify It Works
+1. Three sample asset polygons should appear.
+2. Click a polygon.
+3. `Edit Data` and `Edit Geometry` become active.
+4. Click `Edit Geometry`.
+5. Move one or more polygon vertices.
+6. Save through the Leaflet edit toolbar.
+7. The parcel area is recalculated.
+8. Refresh the browser; the changed polygon should remain.
 
-1. The map is visible.
-2. Three sample polygons appear.
-3. Click one polygon and a popup appears.
-4. Use the polygon drawing tool on the left side of the map.
-5. Draw a parcel.
-6. Fill in the form.
-7. Click **Save Asset**.
-8. Refresh the page.
-9. The parcel should remain because it was saved to browser `localStorage`.
-10. Click **Export GeoJSON** to download the spatial dataset.
+## Indonesian Region Data
 
-## Folder Structure
+Source reference:
 
-```text
-tgm-spatial-asset-demo/
-├─ index.html
-├─ styles.css
-├─ app.js
-├─ README.md
-├─ supabase/
-│  └─ schema.sql
-└─ docs/
-   └─ architecture.md
+- `cahyadsn/wilayah`
+- MIT License
+- administrative codes/names based on the Kepmendagri dataset identified by that repository.
+
+The upstream repository contains hierarchy codes/names down to district and village. Its spatial `wilayah_level_1_2` dataset provides boundaries for province and regency/city. We therefore **do not invent missing district/village polygons**.
+
+Generate region data:
+
+```powershell
+python .\scripts\import_regions.py
 ```
 
-## Development Direction
+Expected file:
 
-### MVP
+```text
+data\administrative-regions.geojson
+```
 
-- User authentication
-- Supabase database
-- PostGIS polygon storage
-- CRUD asset register
-- Map + table synchronization
-- Asset status
-- Price
-- area
-- seller / source
-- photos
-- project / portfolio relation
-- audit trail
-- role-based access
+Reload the application and use **Administrative Boundaries** in the sidebar.
 
-### Phase 2
+## Supabase / PostGIS
 
-- Indonesian administrative region relation
-- drawing and editing polygons
-- document attachments
-- SHM / SHGB / certificate metadata
-- contact/owner register
-- spatial search
-- nearby infrastructure
-- map clustering
-- valuation history
-- change history
+Schema:
 
-### Future
+```text
+supabase/schema.sql
+```
 
-- cadastral survey imports
-- GeoJSON / KML / SHP import
-- project opportunity pipeline
-- mobile field survey
-- GPS capture
-- drone / orthophoto overlay
-- BIM / GIS integration
-- portfolio analytics
-- AI-assisted property search and data extraction
+Main tables:
 
-## Important Production Note
+```text
+administrative_regions
+spatial_assets
+```
 
-Do not expose Supabase `service_role` keys in frontend code.
+`administrative_regions.boundary` uses `MultiPolygon`.
 
-The production application should use:
+`spatial_assets.geometry` uses `Polygon`.
 
-- Supabase Auth
-- Row Level Security
-- project/company membership tables
-- controlled storage buckets
-- validation for geometry and uploaded documents
-- server-side logic for privileged operations
+Spatial GiST indexes are included.
+
+The SQL also includes authenticated RLS policies and database functions that convert PostGIS geometry to/from GeoJSON for Leaflet.
+
+## Supabase Security
+
+Never store a Supabase `service_role` / secret key in this public repository.
+
+`supabase-config.js` is intentionally disabled. Later it should contain only frontend-safe project configuration, while the app uses Supabase Auth + RLS.
+
+## Production Architecture
+
+```text
+USER
+  │
+  ▼
+WEB APP
+Leaflet + Asset Forms
+  │
+  ├─ CRUD asset data
+  ├─ Draw polygon
+  ├─ Edit polygon
+  └─ Region layers
+  │
+  ▼
+SUPABASE
+  ├─ Auth
+  ├─ PostgreSQL
+  ├─ PostGIS
+  ├─ RLS
+  └─ Storage (future photos/documents)
+```
+
+## Next Development Step
+
+1. Select/create the Supabase project for this system.
+2. Enable/deploy PostGIS schema.
+3. Add Supabase authentication.
+4. Replace local asset adapter with Supabase RPC/Data API.
+5. Import administrative region master data.
+6. Add asset photos, owner/contact, certificate/legal data, and document attachments.
