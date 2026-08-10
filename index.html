@@ -4,179 +4,84 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TGM Spatial Asset Demo</title>
-
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">TGM</div>
-        <div>
-          <h1>Spatial Asset Demo</h1>
-          <p>Land parcel & property inventory</p>
-        </div>
-      </div>
+      <div class="brand"><div class="brand-mark">TGM</div><div><h1>Spatial Asset Demo</h1><p>Land parcel & property inventory</p></div></div>
+
+      <section class="card">
+        <h2>Data Mode</h2>
+        <p id="dataMode" class="muted">Local demo</p>
+        <p class="muted">Supabase adapter/schema sudah disiapkan. Tanpa konfigurasi Supabase, data tetap disimpan ke browser.</p>
+      </section>
 
       <section class="card">
         <h2>Portfolio Summary</h2>
         <div class="stats-grid">
-          <div class="stat">
-            <span>Total Assets</span>
-            <strong id="statTotal">0</strong>
-          </div>
-          <div class="stat">
-            <span>Available</span>
-            <strong id="statAvailable">0</strong>
-          </div>
-          <div class="stat">
-            <span>Reserved</span>
-            <strong id="statReserved">0</strong>
-          </div>
-          <div class="stat">
-            <span>Sold</span>
-            <strong id="statSold">0</strong>
-          </div>
+          <div class="stat"><span>Total Assets</span><strong id="statTotal">0</strong></div>
+          <div class="stat"><span>Available</span><strong id="statAvailable">0</strong></div>
+          <div class="stat"><span>Reserved</span><strong id="statReserved">0</strong></div>
+          <div class="stat"><span>Sold</span><strong id="statSold">0</strong></div>
         </div>
       </section>
 
       <section class="card">
         <h2>Filter</h2>
-        <label class="field">
-          <span>Status</span>
-          <select id="statusFilter">
-            <option value="ALL">All status</option>
-            <option value="AVAILABLE">Available</option>
-            <option value="RESERVED">Reserved</option>
-            <option value="SOLD">Sold</option>
-          </select>
-        </label>
+        <label class="field"><span>Status</span><select id="statusFilter"><option value="ALL">All status</option><option value="AVAILABLE">Available</option><option value="RESERVED">Reserved</option><option value="SOLD">Sold</option></select></label>
+        <label class="field"><span>Asset Type</span><select id="typeFilter"><option value="ALL">All types</option><option value="LAND">Land</option><option value="HOUSE">House</option><option value="BUILDING">Building</option><option value="COMMERCIAL">Commercial</option></select></label>
+        <div class="button-row"><button id="fitAllBtn" class="button button-secondary">Fit All</button><button id="exportBtn" class="button">Export GeoJSON</button></div>
+      </section>
 
-        <label class="field">
-          <span>Asset Type</span>
-          <select id="typeFilter">
-            <option value="ALL">All types</option>
-            <option value="LAND">Land</option>
-            <option value="HOUSE">House</option>
-            <option value="COMMERCIAL">Commercial</option>
-          </select>
-        </label>
+      <section class="card">
+        <h2>Geometry Editor</h2>
+        <p class="muted">Klik sebuah aset, lalu pilih <b>Edit Geometry</b>. Geser vertex polygon dan tekan Save pada toolbar Leaflet.</p>
+        <div class="button-row"><button id="editGeometryBtn" class="button button-secondary" disabled>Edit Geometry</button><button id="editDataBtn" class="button button-secondary" disabled>Edit Data</button></div>
+      </section>
 
-        <div class="button-row">
-          <button id="fitAllBtn" class="button button-secondary">Fit All</button>
-          <button id="exportBtn" class="button">Export GeoJSON</button>
-        </div>
+      <section class="card">
+        <h2>Administrative Boundaries</h2>
+        <label class="field"><span>Layer</span><select id="regionLevel"><option value="OFF">Off</option><option value="PROVINCE">Province</option><option value="REGENCY">Regency / City</option><option value="DISTRICT">District*</option><option value="VILLAGE">Village*</option></select></label>
+        <p class="muted">*Kode/nama tersedia dari sumber wilayah; polygon kecamatan/kelurahan belum boleh diasumsikan tersedia. App hanya menampilkan geometry yang benar-benar ada.</p>
       </section>
 
       <section class="card hint-card">
-        <h2>Create New Parcel</h2>
-        <ol>
-          <li>Click the polygon tool on the map.</li>
-          <li>Draw the parcel boundary.</li>
-          <li>Fill in the asset information.</li>
-          <li>Save it to this browser.</li>
-        </ol>
-        <p class="muted">
-          Demo data is stored in <code>localStorage</code>. In the production
-          version this will be replaced by Supabase + PostGIS.
-        </p>
+        <h2>Create New Parcel</h2><ol><li>Click polygon/rectangle tool.</li><li>Draw boundary.</li><li>Fill asset information.</li><li>Save asset.</li></ol>
       </section>
     </aside>
 
     <main class="map-wrapper">
-      <div class="topbar">
-        <div>
-          <span class="eyebrow">Spatial Asset Management</span>
-          <strong>Interactive parcel inventory</strong>
-        </div>
-        <div class="legend">
-          <span><i class="dot available"></i>Available</span>
-          <span><i class="dot reserved"></i>Reserved</span>
-          <span><i class="dot sold"></i>Sold</span>
-        </div>
-      </div>
+      <div class="topbar"><div><span class="eyebrow">Spatial Asset Management</span><strong>Interactive parcel inventory</strong></div><div class="legend"><span><i class="dot available"></i>Available</span><span><i class="dot reserved"></i>Reserved</span><span><i class="dot sold"></i>Sold</span></div></div>
       <div id="map"></div>
     </main>
   </div>
 
   <div id="assetModal" class="modal hidden" aria-hidden="true">
     <div class="modal-panel">
-      <div class="modal-header">
-        <div>
-          <span class="eyebrow">New Spatial Asset</span>
-          <h2>Parcel Information</h2>
-        </div>
-        <button id="cancelModalBtn" class="icon-button" aria-label="Close">×</button>
-      </div>
-
+      <div class="modal-header"><div><span id="modalEyebrow" class="eyebrow">Spatial Asset</span><h2 id="modalTitle">Parcel Information</h2></div><button id="cancelModalBtn" class="icon-button" aria-label="Close">×</button></div>
       <form id="assetForm">
+        <input type="hidden" id="assetId" />
         <div class="form-grid">
-          <label class="field">
-            <span>Asset Code</span>
-            <input id="assetCode" required placeholder="TGM-LAND-001" />
-          </label>
-          <label class="field">
-            <span>Asset Type</span>
-            <select id="assetType" required>
-              <option value="LAND">Land</option>
-              <option value="HOUSE">House</option>
-              <option value="COMMERCIAL">Commercial</option>
-            </select>
-          </label>
-          <label class="field field-full">
-            <span>Title / Name</span>
-            <input id="assetTitle" required placeholder="Kavling Selatan A01" />
-          </label>
-          <label class="field">
-            <span>Status</span>
-            <select id="assetStatus" required>
-              <option value="AVAILABLE">Available</option>
-              <option value="RESERVED">Reserved</option>
-              <option value="SOLD">Sold</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Price (IDR)</span>
-            <input id="assetPrice" type="number" min="0" step="1000000" placeholder="1500000000" />
-          </label>
-          <label class="field">
-            <span>Area (m²)</span>
-            <input id="assetArea" type="number" min="0" step="0.01" readonly />
-          </label>
-          <label class="field">
-            <span>Source</span>
-            <input id="assetSource" placeholder="Owner / Agent / Internal" />
-          </label>
-          <label class="field field-full">
-            <span>Notes</span>
-            <textarea id="assetNotes" rows="3" placeholder="Road access, certificate status, contact notes, etc."></textarea>
-          </label>
+          <label class="field"><span>Asset Code</span><input id="assetCode" required /></label>
+          <label class="field"><span>Asset Type</span><select id="assetType" required><option value="LAND">Land</option><option value="HOUSE">House</option><option value="BUILDING">Building</option><option value="COMMERCIAL">Commercial</option></select></label>
+          <label class="field field-full"><span>Title / Name</span><input id="assetTitle" required /></label>
+          <label class="field"><span>Status</span><select id="assetStatus" required><option value="AVAILABLE">Available</option><option value="RESERVED">Reserved</option><option value="SOLD">Sold</option></select></label>
+          <label class="field"><span>Price (IDR)</span><input id="assetPrice" type="number" min="0" step="1000000" /></label>
+          <label class="field"><span>Area (m²)</span><input id="assetArea" type="number" min="0" step="0.01" readonly /></label>
+          <label class="field"><span>Source</span><input id="assetSource" /></label>
+          <label class="field field-full"><span>Notes</span><textarea id="assetNotes" rows="3"></textarea></label>
         </div>
-
-        <div class="modal-actions">
-          <button type="button" id="cancelFormBtn" class="button button-secondary">Cancel</button>
-          <button type="submit" class="button">Save Asset</button>
-        </div>
+        <div class="modal-actions"><button type="button" id="cancelFormBtn" class="button button-secondary">Cancel</button><button type="submit" class="button">Save Asset</button></div>
       </form>
     </div>
   </div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="./supabase-config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
