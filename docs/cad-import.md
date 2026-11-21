@@ -6,7 +6,7 @@ The browser demo **cannot decode DWG directly**. Convert CAD geometry to WGS84 G
 
 1. Identify the surveyor-confirmed source CRS (EPSG or PROJ definition). A drawing in arbitrary/local coordinates requires surveyed control points and georeferencing first. **Never guess CRS.**
 2. Put each legal parcel outline in a separate **closed LWPOLYLINE / 2D POLYLINE** in modelspace. Put parcel boundaries on known CAD layers.
-3. Curved/bulge polylines, meshes, INSERT/block-only boundaries and open polylines are not imported. Explode blocks / tessellate arcs into reviewed straight segments if appropriate.
+3. Closed 2D polylines with CAD bulge arcs are supported: curved edges are flattened to straight segments at a configurable 0.02-unit default tolerance. A repeated initial/final vertex is recognized as closure even if AutoCAD's closed flag is off. Truly open, mesh, unsupported 3D, INSERT/block-only and invalid polygons remain rejected.
 4. Parcel identity `CAD-<handle>` is provisional, not a cadastral/legal parcel number. Cross-reference official IDs, area and ownership before publishing.
 
 ## Windows walkthrough
@@ -28,6 +28,8 @@ python scripts/cad_parcels_to_geojson.py --input "C:\\survey\\0101.dxf" --source
 
 Replace `EPSG:XXXX` and `PARCEL_BOUNDARY` with **verified values**, not examples. Multiple `--layer` arguments are allowed.
 
+For drawings whose units are metres, `--flatten-tolerance 0.02` approximates curved edges to roughly 2 cm; this is not an independent survey accuracy claim. Arc tessellation is enabled by default, but source metadata and resulting areas must still be checked.
+
 The command prints selected layer counts, imported/ignored entity counts, and stores a FeatureCollection of WGS84 [longitude, latitude] polygons. Compare imported positions with survey control points and independent basemap data. Coordinates inside the valid WGS84 range alone do **not** establish positional accuracy.
 
 ## Browser test
@@ -35,7 +37,7 @@ The command prints selected layer counts, imported/ignored entity counts, and st
 1. Open the demo page, click **Import GeoJSON**, select the generated file.
 2. The map fits imported polygons, replacing the 3 default demo shapes. Imported assets use provisional CAD IDs and **Unverified** status.
 3. Refresh the page to check local persistence; use **Export GeoJSON** for a local backup.
-4. The app rejects malformed geometry, unexpected CRS coordinate ranges, duplicate asset codes, and excessive import size. The Python pipeline additionally checks polygon topology; browser import is **not** a replacement for GIS/survey QA.
+4. The app rejects malformed geometry, unexpected CRS coordinate ranges, duplicate asset codes, and excessive import size. Source-provided positive `area_m2` is preserved during import; editing a polygon in the browser recalculates an approximate area, so certified final values should come from a project-governed backend calculation. The Python pipeline additionally checks polygon topology; browser import is **not** a replacement for GIS/survey QA.
 
 ## Security and deployment
 
