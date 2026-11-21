@@ -1,0 +1,8 @@
+# Orthophoto / site imagery is private and must never be committed to this public repo.
+data/drone/
+*.tif
+*.tiff
+*.vrt
+*.tfw
+*.jgw
+*.pgw
