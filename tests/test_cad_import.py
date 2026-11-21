@@ -42,6 +42,30 @@ class CADImportTests(unittest.TestCase):
             self.assertEqual(feature["geometry"]["coordinates"][0][0],
                              feature["geometry"]["coordinates"][0][-1])
 
+    def test_repeated_endpoint_without_closed_bit_and_curved_bulge(self):
+        with tempfile.TemporaryDirectory() as root:
+            input_file = Path(root) / "bulge.dxf"
+            doc = ezdxf.new("R2013")
+            doc.modelspace().add_lwpolyline(
+                [(500000, 9530100, 0, 0, 0),
+                 (500080, 9530100, 0, 0, 0.4),
+                 (500080, 9530180, 0, 0, 0),
+                 (500000, 9530180, 0, 0, 0),
+                 (500000, 9530100, 0, 0, 0)],
+                format="xyseb",
+                close=False,
+                dxfattribs={"layer": "PARCEL"}
+            )
+            doc.saveas(input_file)
+            fc, matched, skipped = importer.convert(input_file, "EPSG:32751", ["PARCEL"])
+            self.assertEqual(matched, 1)
+            self.assertEqual(len(fc["features"]), 1)
+            self.assertFalse(skipped)
+            coords = fc["features"][0]["geometry"]["coordinates"][0]
+            self.assertGreater(len(coords), 5, "Bulge arc must be tessellated")
+            self.assertEqual(coords[0], coords[-1])
+            self.assertGreater(fc["features"][0]["properties"]["area_m2"], 0)
+
     def test_requires_nonempty_matching_layer(self):
         with tempfile.TemporaryDirectory() as root:
             input_file = Path(root) / "empty.dxf"
