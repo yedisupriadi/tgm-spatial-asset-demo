@@ -77,7 +77,7 @@ function renderAssets(){
   const filtered=assets.filter(f=>(status==="ALL"||f.properties.status===status)&&(type==="ALL"||f.properties.asset_type===type));
   assetLayer.clearLayers();assetLayer.addData({type:"FeatureCollection",features:filtered});updateStats();
 }
-function updateStats(){const count=s=>assets.filter(f=>f.properties.status===s).length;el("statTotal").textContent=assets.length;el("statAvailable").textContent=count("AVAILABLE");el("statReserved").textContent=count("RESERVED");el("statSold").textContent=count("SOLD");}
+function updateStats(){const count=s=>assets.filter(f=>f.properties.status===s).length;el("statTotal").textContent=assets.length;el("statAvailable").textContent=count("AVAILABLE");el("statReserved").textContent=count("RESERVED");el("statSold").textContent=count("SOLD");el("statUnverified").textContent=count("UNVERIFIED");}
 function openSelectedAssetForm(){const f=assets.find(x=>x.properties.id===selectedAssetId);if(!f)return;const p=f.properties;el("assetId").value=p.id;el("assetCode").value=p.code||"";el("assetType").value=p.asset_type||"LAND";el("assetTitle").value=p.title||"";el("assetStatus").value=p.status||"UNVERIFIED";el("assetPrice").value=p.price_idr||"";el("assetArea").value=p.area_m2||"";el("assetSource").value=p.source||"";el("assetNotes").value=p.notes||"";showModal("Edit Asset Data");}
 function startGeometryEdit(){
   const f=assets.find(x=>x.properties.id===selectedAssetId);if(!f)return;
