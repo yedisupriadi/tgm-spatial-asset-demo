@@ -39,30 +39,46 @@ def open_cad(path: Path):
     raise ValueError("Input must be .dwg (ODA required) or .dxf")
 
 
-def entity_ring(entity):
-    """Straight closed 2D polylines only; curves and meshes must be preprocessed."""
+def entity_ring(entity, flatten_tolerance=0.02):
+    """Extract one closed 2D outline, tessellating CAD bulge arcs.
+
+    Some CAD exports repeat the initial endpoint without setting the closed bit.
+    Never close an actually open polyline by guessing its missing edge.
+    """
+    from ezdxf import path as ezpath
+
     kind = entity.dxftype()
     if kind == "LWPOLYLINE":
-        if not entity.closed:
-            return None, "open polyline"
-        if any(abs(b) > 1e-12 for _, _, b in entity.get_points("xyb")):
-            return None, "curve/bulge segment"
-        vertices = entity.vertices_in_wcs()
+        raw = list(entity.get_points("xy"))
+        if abs(float(entity.dxf.get("elevation", 0))) > 0.01:
+            return None, "nonplanar elevation"
+        is_closed = entity.closed
     elif kind == "POLYLINE":
-        if not entity.is_closed:
-            return None, "open polyline"
         if entity.is_3d_polyline or entity.is_polygon_mesh or entity.is_poly_face_mesh:
             return None, "3D/mesh polyline"
-        if any(abs(v.dxf.get("bulge", 0)) > 1e-12 for v in entity.vertices):
-            return None, "curve/bulge segment"
-        vertices = entity.points_in_wcs()
+        raw = [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+        is_closed = entity.is_closed
     else:
         return None, "unsupported entity"
-    points = [(float(p.x), float(p.y)) for p in vertices]
+    if len(raw) < 3:
+        return None, "fewer than 3 vertices"
+    repeated_endpoint = (
+        abs(raw[0][0] - raw[-1][0]) <= 1e-8
+        and abs(raw[0][1] - raw[-1][1]) <= 1e-8
+    )
+    if not (is_closed or repeated_endpoint):
+        return None, "open polyline"
+    cad_path = ezpath.make_path(entity)
+    if not cad_path.is_closed:
+        return None, "CAD path not closed"
+    points = [(float(p.x), float(p.y)) for p in cad_path.flattening(distance=flatten_tolerance)]
     if len(set(points)) < 3:
         return None, "fewer than 3 distinct vertices"
     if points[0] != points[-1]:
         points.append(points[0])
+    polygon = Polygon(points)
+    if not polygon.is_valid or polygon.area <= 0:
+        return None, f"invalid CAD polygon: {explain_validity(polygon)}"
     return points, None
 
 
@@ -72,14 +88,14 @@ def list_layers(path: Path):
     closed = Counter(
         e.dxf.layer for e in document.modelspace()
         if e.dxftype() in ("LWPOLYLINE", "POLYLINE")
-        and (e.closed if e.dxftype() == "LWPOLYLINE" else e.is_closed)
+        and entity_ring(e)[1] is None
     )
     print("Layer\tEntities\tClosed polylines")
     for name in sorted(total):
         print(f"{name}\t{total[name]}\t{closed[name]}")
 
 
-def convert(path: Path, source_crs: str, layers: list[str]):
+def convert(path: Path, source_crs: str, layers: list[str], flatten_tolerance: float = 0.02):
     transformer = Transformer.from_crs(
         CRS.from_user_input(source_crs), CRS.from_epsg(4326), always_xy=True
     )
@@ -90,7 +106,7 @@ def convert(path: Path, source_crs: str, layers: list[str]):
         if entity.dxf.layer.casefold() not in selected:
             continue
         matched += 1
-        ring, error = entity_ring(entity)
+        ring, error = entity_ring(entity, flatten_tolerance)
         if error:
             skipped[error] += 1
             continue
@@ -147,6 +163,8 @@ def main(argv=None):
     parser.add_argument("--source-crs", help="Surveyor-confirmed EPSG/PROJ definition")
     parser.add_argument("--layer", action="append", default=[], help="Repeat for multiple parcel layers")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--flatten-tolerance", type=float, default=0.02,
+                        help="Maximum curve tessellation deviation in drawing units; default 0.02 m")
     args = parser.parse_args(argv)
     try:
         if args.list_layers:
@@ -154,7 +172,9 @@ def main(argv=None):
             return 0
         if not args.source_crs or not args.layer or not args.output:
             parser.error("conversion requires --source-crs, --layer and --output (CRS is never guessed)")
-        result, matched, skipped = convert(args.input, args.source_crs, args.layer)
+        if args.flatten_tolerance <= 0 or args.flatten_tolerance > 1:
+            raise ValueError("--flatten-tolerance must be > 0 and <= 1 drawing unit")
+        result, matched, skipped = convert(args.input, args.source_crs, args.layer, args.flatten_tolerance)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"Saved {len(result['features'])} valid polygons from {matched} CAD entities to {args.output}")
