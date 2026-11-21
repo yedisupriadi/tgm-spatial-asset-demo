@@ -76,6 +76,19 @@ UPDATE ASSET GEOMETRY
 
 Local demo menyimpan update ke `localStorage`. Production mode akan mengirim geometry GeoJSON ke Supabase/PostGIS.
 
+## CAD DWG / DXF Parcel Import (Experimental)
+
+A CAD conversion tool and validated GeoJSON browser import have been added:
+
+- `scripts/cad_parcels_to_geojson.py` reads DXF directly, or DWG **only when the ODA File Converter is installed**.
+- Conversion requires an **explicit, surveyor-confirmed source CRS** and one or more selected closed-polyline parcel layers.
+- Invalid/open/curved polylines are skipped or rejected; no geometry is guessed from a screenshot.
+- Generated parcels have provisional `CAD-<handle>` IDs and `UNVERIFIED` status.
+- Select **Import GeoJSON** in the sidebar. Browser data is localStorage-only, **not** Supabase.
+- Do not commit confidential survey DWGs or parcel coordinates to this public demo.
+
+Full instructions: [CAD import guide](docs/cad-import.md).
+
 ## Run Locally on Windows
 
 Open **PowerShell** inside the repository folder.

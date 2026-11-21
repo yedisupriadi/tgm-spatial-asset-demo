@@ -208,6 +208,7 @@ code {
 .dot.available { background: var(--available); }
 .dot.reserved { background: var(--reserved); }
 .dot.sold { background: var(--sold); }
+.dot.unverified { background: #697887; }
 
 .asset-popup {
   min-width: 220px;
