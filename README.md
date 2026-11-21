@@ -13,14 +13,14 @@ Demo tetap dapat berjalan tanpa database menggunakan browser `localStorage`, tet
 - Leaflet interactive map
 - OpenStreetMap + satellite basemap
 - Asset types: Land, House, Building, Commercial
-- Status: Available, Reserved, Sold
+- Status: Available, Reserved, Sold, Unverified
 - Add asset by drawing polygon / rectangle
 - Click asset polygon to select it
 - Edit asset attributes
 - Edit polygon geometry by moving vertices
 - Automatic polygon area calculation
 - Filter assets
-- Export GeoJSON
+- Import/Export GeoJSON (Polygon and MultiPolygon; optional replace/append local records)
 - Administrative boundary layer selector
 - Indonesian administrative hierarchy importer
 - Supabase/PostGIS schema with RLS and spatial indexes
@@ -53,7 +53,7 @@ Spatial Asset Row
   ├─ Status
   ├─ Price
   ├─ Region
-  └─ Geometry (Polygon)
+  └─ Geometry (Polygon or MultiPolygon)
 ```
 
 Geometry ini dapat dibuat dan diedit user.
@@ -82,12 +82,16 @@ A CAD conversion tool and validated GeoJSON browser import have been added:
 
 - `scripts/cad_parcels_to_geojson.py` reads DXF directly, or DWG **only when the ODA File Converter is installed**.
 - Conversion requires an **explicit, surveyor-confirmed source CRS** and one or more selected closed-polyline parcel layers.
-- Invalid/open/curved polylines are skipped or rejected; no geometry is guessed from a screenshot.
+- Invalid/open polylines are rejected; CAD bulge arcs on closed loops are tessellated with explicit tolerance.
 - Generated parcels have provisional `CAD-<handle>` IDs and `UNVERIFIED` status.
 - Select **Import GeoJSON** in the sidebar. Browser data is localStorage-only, **not** Supabase.
 - Do not commit confidential survey DWGs or parcel coordinates to this public demo.
 
 Full instructions: [CAD import guide](docs/cad-import.md).
+
+- To represent disjoint CAD outlines as **one** Area / register record, use `scripts/group_geojson_area.py` and import the resulting single MultiPolygon Feature.
+- The demo disables vertex editing for MultiPolygon: edit source CAD/GIS and re-import with **Replace current local map** after backing up local data.
+- Existing project Spatial ID - Area integration and drone GeoTIFF overlay are proposed only, not deployed. See [Interpros spatial linkage design](docs/interpros-spatial-linkage.md).
 
 ## Run Locally on Windows
 
@@ -155,7 +159,7 @@ spatial_assets
 
 `administrative_regions.boundary` uses `MultiPolygon`.
 
-`spatial_assets.geometry` uses `Polygon`.
+`spatial_assets.geometry` uses `MultiPolygon` in the proposed new-install schema (single Polygons are converted via `ST_Multi`). Existing databases require a reviewed migration.
 
 Spatial GiST indexes are included.
 
