@@ -154,7 +154,7 @@ async function importGeoJsonFile(event){
       return {type:"Feature",geometry:feature.geometry,properties:{
         ...p,id,code,title:String(p.title||code),asset_type:"LAND",
         status:["AVAILABLE","RESERVED","SOLD","UNVERIFIED"].includes(p.status)?p.status:"UNVERIFIED",
-        area_m2:Math.round(area*100)/100
+        area_m2:Number.isFinite(Number(p.area_m2)) && Number(p.area_m2)>0 ? Number(p.area_m2) : Math.round(area*100)/100
       }};
     });
     // Commit the entire import atomically; on a quota error the current data stays intact.
