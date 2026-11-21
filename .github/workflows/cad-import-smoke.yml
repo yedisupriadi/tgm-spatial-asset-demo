@@ -1,0 +1,38 @@
+name: CAD Parcel Import Smoke Tests
+
+on:
+  pull_request:
+    paths:
+      - "scripts/cad_parcels_to_geojson.py"
+      - "scripts/requirements-cad.txt"
+      - "tests/test_cad_import.py"
+      - "app.js"
+      - "index.html"
+      - ".github/workflows/cad-import-smoke.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/cad_parcels_to_geojson.py"
+      - "scripts/requirements-cad.txt"
+      - "tests/test_cad_import.py"
+      - "app.js"
+      - "index.html"
+      - ".github/workflows/cad-import-smoke.yml"
+
+jobs:
+  cad-import-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -r scripts/requirements-cad.txt
+      - run: python -m unittest discover -s tests -p "test_cad_import.py"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check app.js
