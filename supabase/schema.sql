@@ -1,4 +1,6 @@
 -- TGM Spatial Asset - Supabase/PostGIS schema
+-- NOTE: CREATE TABLE IF NOT EXISTS does not migrate an existing status check.
+-- Review and apply a separate vetted migration before production import of UNVERIFIED parcels.
 -- Run in Supabase SQL Editor after reviewing the target project.
 -- PostGIS docs: use geometry/geography types and GiST spatial indexes.
 
@@ -31,7 +33,7 @@ create table if not exists public.spatial_assets (
   asset_code text not null unique,
   title text not null,
   asset_type text not null check (asset_type in ('LAND','HOUSE','BUILDING','COMMERCIAL')),
-  status text not null default 'AVAILABLE' check (status in ('AVAILABLE','RESERVED','SOLD')),
+  status text not null default 'AVAILABLE' check (status in ('AVAILABLE','RESERVED','SOLD','UNVERIFIED')),
   region_code text references public.administrative_regions(code),
   address text,
   price_idr numeric(18,2),
