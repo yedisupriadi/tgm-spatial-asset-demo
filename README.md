@@ -12,6 +12,7 @@ Demo tetap dapat berjalan tanpa database menggunakan browser `localStorage`, tet
 
 - Leaflet interactive map
 - OpenStreetMap + satellite basemap
+- Optional **local drone orthophoto XYZ layer** with layer toggle, opacity and Fit Drone (manifest-driven; no GeoTIFF data committed)
 - Asset types: Land, House, Building, Commercial
 - Status: Available, Reserved, Sold, Unverified
 - Add asset by drawing polygon / rectangle
@@ -92,6 +93,18 @@ Full instructions: [CAD import guide](docs/cad-import.md).
 - To represent disjoint CAD outlines as **one** Area / register record, use `scripts/group_geojson_area.py` and import the resulting single MultiPolygon Feature.
 - The demo disables vertex editing for MultiPolygon: edit source CAD/GIS and re-import with **Replace current local map** after backing up local data.
 - Existing project Spatial ID - Area integration and drone GeoTIFF overlay are proposed only, not deployed. See [Interpros spatial linkage design](docs/interpros-spatial-linkage.md).
+
+## Drone GeoTIFF / Orthophoto Overlay (Local Pilot)
+
+The viewer now supports optional XYZ drone tiles over the existing satellite basemap.
+No drone imagery or private project coordinates are included in this public repository.
+
+- Use GDAL (available via QGIS/OSGeo4W) to inspect GeoTIFF, warp to EPSG:3857 with alpha, and generate XYZ PNG tiles.
+- Generate `data/drone/manifest.json` from the real GeoTIFF WGS84 extent using `scripts/build_drone_manifest.py`.
+- Test on `http://localhost:5500`, not on public GitHub Pages. `data/drone/` is intentionally gitignored.
+- Use **Fit Drone**, **Drone Orthophoto** layer control, and **opacity** to compare overlay with satellite and CAD boundaries.
+
+Complete commands and QA checklist: [Drone overlay guide](docs/drone-overlay.md).
 
 ## Run Locally on Windows
 

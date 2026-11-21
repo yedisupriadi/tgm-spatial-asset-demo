@@ -1,5 +1,7 @@
 const STORAGE_KEY = "tgm_spatial_asset_demo_v2";
 const REGION_DATA_URL = "./data/administrative-regions.geojson";
+const DRONE_MANIFEST_URL = "./data/drone/manifest.json";
+const DRONE_TILES_URL = "./data/drone/tiles/{z}/{x}/{y}.png";
 
 const sampleAssets = [
   { type:"Feature", properties:{id:"demo-001",code:"TGM-LAND-001",title:"Demo Kavling A01",asset_type:"LAND",status:"AVAILABLE",price_idr:1850000000,area_m2:976.4,source:"Demo Owner",notes:"Sample parcel."}, geometry:{type:"Polygon",coordinates:[[[106.81270,-6.30830],[106.81405,-6.30818],[106.81415,-6.30905],[106.81278,-6.30918],[106.81270,-6.30830]]] } },
@@ -13,18 +15,21 @@ let selectedAssetId = null;
 let editLayer = null;
 let originalEditGeometry = null;
 let regions = [];
+let droneLayer = null;
+let droneBounds = null;
 
 const el = id => document.getElementById(id);
 const map = L.map("map", { zoomControl:true }).setView([-6.3090,106.8142],17);
 const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:20,attribution:"&copy; OpenStreetMap contributors"});
 const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:20,attribution:"Tiles &copy; Esri"});
 osm.addTo(map);
-L.control.layers({OpenStreetMap:osm,Satellite:satellite},{},{position:"topright"}).addTo(map);
+const layerControl = L.control.layers({OpenStreetMap:osm,Satellite:satellite},{},{position:"topright"}).addTo(map);
 
 const assetLayer = L.geoJSON(null,{style:f=>getStyle(f.properties.status),onEachFeature:(feature,layer)=>{
   layer.bindPopup(buildPopup(feature.properties));
   layer.on("click",()=>selectAsset(feature.properties.id));
 }}).addTo(map);
+layerControl.addOverlay(assetLayer,"Area Boundary");
 const regionLayer = L.geoJSON(null,{style:{color:"#486a91",weight:1.5,fillOpacity:0.05},onEachFeature:(f,l)=>l.bindTooltip(`${f.properties.code || ""} ${f.properties.name || ""}`.trim())}).addTo(map);
 const editableGroup = new L.FeatureGroup().addTo(map);
 
@@ -64,10 +69,58 @@ el("editGeometryBtn").addEventListener("click",startGeometryEdit);
 el("saveGeometryBtn").addEventListener("click",saveGeometryEdit);
 el("cancelGeometryBtn").addEventListener("click",cancelGeometryEdit);
 el("regionLevel").addEventListener("change",renderRegions);
+el("droneOpacity").addEventListener("input",event=>{
+  const value=Number(event.target.value);
+  el("droneOpacityValue").textContent=`${value}%`;
+  if(droneLayer)droneLayer.setOpacity(value/100);
+});
+el("fitDroneBtn").addEventListener("click",()=>{
+  if(droneBounds)map.fitBounds(droneBounds.pad(.08));
+});
 
 init();
 
-async function init(){setDataMode();renderAssets();fitAll();await loadRegions();}
+async function init(){setDataMode();renderAssets();fitAll();await Promise.all([loadRegions(),loadDroneOverlay()]);}
+async function loadDroneOverlay(){
+  const status=el("droneStatus");
+  try{
+    const response=await fetch(DRONE_MANIFEST_URL,{cache:"no-store"});
+    if(response.status===404){
+      status.textContent="No drone layer configured. See docs/drone-overlay.md.";
+      return;
+    }
+    if(!response.ok)throw new Error("Manifest HTTP "+response.status);
+    const config=await response.json();
+    const bounds=config?.bounds;
+    if(!Array.isArray(bounds)||bounds.length!==2||
+       !bounds.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))||
+       !(bounds[0][0]<bounds[1][0]&&bounds[0][1]<bounds[1][1])||
+       bounds.some(p=>Math.abs(p[0])>85.06||Math.abs(p[1])>180))
+      throw new Error("Invalid WGS84 bounds (expected [[south,west],[north,east]]).");
+    const minZoom=config.minZoom,maxNativeZoom=config.maxNativeZoom;
+    if(!Number.isInteger(minZoom)||!Number.isInteger(maxNativeZoom)||
+       minZoom<0||maxNativeZoom>22||minZoom>maxNativeZoom)
+      throw new Error("Invalid minZoom/maxNativeZoom.");
+    droneBounds=L.latLngBounds(bounds);
+    droneLayer=L.tileLayer(DRONE_TILES_URL,{
+      bounds:droneBounds,minZoom,maxNativeZoom,
+      maxZoom:22,opacity:Number(el("droneOpacity").value)/100,
+      noWrap:true,tms:false,
+      attribution:"Drone imagery (project survey; verify imagery rights)"
+    });
+    layerControl.addOverlay(droneLayer,"Drone Orthophoto");
+    droneLayer.addTo(map);
+    const label=String(config.name||"Drone Orthophoto");
+    const date=typeof config.acquiredAt==="string"?config.acquiredAt.trim():"";
+    status.textContent=label+(date?" · Acquired "+date:"")+" · Loaded locally; check alignment.";
+    el("fitDroneBtn").disabled=false;
+    el("droneOpacity").disabled=false;
+  }catch(error){
+    status.textContent="Drone overlay unavailable: "+error.message;
+    droneLayer=null;
+    droneBounds=null;
+  }
+}
 function setDataMode(){const cfg=window.TGM_SUPABASE||{};el("dataMode").textContent=cfg.enabled?"Supabase configuration detected (DB adapter is next step)":"Local demo mode";}
 function loadAssets(){try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));if(Array.isArray(s)&&s.length)return s;}catch(e){}return JSON.parse(JSON.stringify(sampleAssets));}
 function saveAssets(){localStorage.setItem(STORAGE_KEY,JSON.stringify(assets));}

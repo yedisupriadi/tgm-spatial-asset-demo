@@ -5,9 +5,11 @@ on:
     paths:
       - "scripts/cad_parcels_to_geojson.py"
       - "scripts/group_geojson_area.py"
+      - "scripts/build_drone_manifest.py"
       - "scripts/requirements-cad.txt"
       - "tests/test_cad_import.py"
       - "tests/test_group_geojson_area.py"
+      - "tests/test_drone_manifest.py"
       - "app.js"
       - "index.html"
       - ".github/workflows/cad-import-smoke.yml"
