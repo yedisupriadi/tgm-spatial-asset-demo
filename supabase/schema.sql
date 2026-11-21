@@ -1,5 +1,5 @@
 -- TGM Spatial Asset - Supabase/PostGIS schema
--- NOTE: CREATE TABLE IF NOT EXISTS does not migrate an existing status check.
+-- NOTE: CREATE TABLE IF NOT EXISTS does not migrate an existing geometry type or status check.
 -- Review and apply a separate vetted migration before production import of UNVERIFIED parcels.
 -- Run in Supabase SQL Editor after reviewing the target project.
 -- PostGIS docs: use geometry/geography types and GiST spatial indexes.
@@ -40,7 +40,7 @@ create table if not exists public.spatial_assets (
   area_m2 numeric(18,2),
   source text,
   notes text,
-  geometry extensions.geometry(Polygon, 4326) not null,
+  geometry extensions.geometry(MultiPolygon, 4326) not null,
   created_by uuid not null default auth.uid() references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -108,7 +108,7 @@ $$;
 revoke all on function public.get_my_spatial_assets() from public, anon;
 grant execute on function public.get_my_spatial_assets() to authenticated;
 
--- Save helper: accepts GeoJSON Polygon from Leaflet.
+-- Save helper: accepts GeoJSON Polygon or MultiPolygon from Leaflet.
 create or replace function public.save_spatial_asset(
   p_id uuid,
   p_asset_code text,
@@ -134,8 +134,9 @@ declare
 begin
   if auth.uid() is null then raise exception 'Authentication required'; end if;
   v_geom := extensions.st_setsrid(extensions.st_geomfromgeojson(p_geometry::text), 4326);
-  if extensions.geometrytype(v_geom) <> 'POLYGON' then raise exception 'Geometry must be Polygon'; end if;
+  if extensions.geometrytype(v_geom) not in ('POLYGON','MULTIPOLYGON') then raise exception 'Geometry must be Polygon or MultiPolygon'; end if;
   if not extensions.st_isvalid(v_geom) then raise exception 'Invalid polygon geometry'; end if;
+  v_geom := extensions.st_multi(v_geom);
   v_area := extensions.st_area(v_geom::extensions.geography);
 
   if p_id is null then
