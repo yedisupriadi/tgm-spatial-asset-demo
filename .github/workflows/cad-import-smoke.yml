@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - "scripts/cad_parcels_to_geojson.py"
+      - "scripts/group_geojson_area.py"
       - "scripts/requirements-cad.txt"
       - "tests/test_cad_import.py"
+      - "tests/test_group_geojson_area.py"
       - "app.js"
       - "index.html"
       - ".github/workflows/cad-import-smoke.yml"

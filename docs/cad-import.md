@@ -32,12 +32,22 @@ For drawings whose units are metres, `--flatten-tolerance 0.02` approximates cur
 
 The command prints selected layer counts, imported/ignored entity counts, and stores a FeatureCollection of WGS84 [longitude, latitude] polygons. Compare imported positions with survey control points and independent basemap data. Coordinates inside the valid WGS84 range alone do **not** establish positional accuracy.
 
+## Combine multiple CAD outlines into one Area record
+
+When an **authoritative Area ID** comprises multiple disjoint polygons, preserve them as one GeoJSON `MultiPolygon` Feature rather than creating two Area records or connecting their boundaries with an invented line.
+
+```powershell
+python scripts/group_geojson_area.py --input "data\\survey-parcels.geojson" --area-code "0101" --area-title "0101 WORKSHOP AND OFFICE AREA" --output "data\\area-0101.geojson"
+```
+
+This grouping requires an explicit Area code and rejects intersecting/overlapping parts that would form an invalid MultiPolygon. Review source membership before grouping: **never automatically group different legal lots simply because they share a DXF layer**. The output retains source CAD handles as provenance and marks the geometry UNVERIFIED. The `interpros_subarea_code` is only a candidate lookup field; synchronization must resolve a matching, project-scoped `spatial_id_01_area.id` UUID and validate it.
+
 ## Browser test
 
-1. Open the demo page, click **Import GeoJSON**, select the generated file.
-2. The map fits imported polygons, replacing the 3 default demo shapes. Imported assets use provisional CAD IDs and **Unverified** status.
-3. Refresh the page to check local persistence; use **Export GeoJSON** for a local backup.
-4. The app rejects malformed geometry, unexpected CRS coordinate ranges, duplicate asset codes, and excessive import size. Source-provided positive `area_m2` is preserved during import; editing a polygon in the browser recalculates an approximate area, so certified final values should come from a project-governed backend calculation. The Python pipeline additionally checks polygon topology; browser import is **not** a replacement for GIS/survey QA.
+1. Open the demo page, choose **Replace current local map** (export a backup first, and confirm replacement if real records exist), click **Import GeoJSON**, select the generated file.
+2. The map fits the imported record(s): one MultiPolygon Feature with two parts counts as **one** asset, not two. Imported assets use unverified geometry status.
+3. Refresh the page to check local persistence; use **Export GeoJSON** for a local backup. Vertex editing is intentionally disabled for MultiPolygon geometry.
+4. The app accepts Polygon or MultiPolygon, and rejects malformed geometry, unexpected CRS coordinate ranges, duplicate asset codes, and excessive import size. Source-provided positive `area_m2` is preserved during import; editing a polygon in the browser recalculates an approximate area, so certified final values should come from a project-governed backend calculation. The Python pipeline additionally checks polygon topology; browser import is **not** a replacement for GIS/survey QA.
 
 ## Security and deployment
 

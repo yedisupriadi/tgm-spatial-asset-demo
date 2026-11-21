@@ -71,7 +71,14 @@ async function init(){setDataMode();renderAssets();fitAll();await loadRegions();
 function setDataMode(){const cfg=window.TGM_SUPABASE||{};el("dataMode").textContent=cfg.enabled?"Supabase configuration detected (DB adapter is next step)":"Local demo mode";}
 function loadAssets(){try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));if(Array.isArray(s)&&s.length)return s;}catch(e){}return JSON.parse(JSON.stringify(sampleAssets));}
 function saveAssets(){localStorage.setItem(STORAGE_KEY,JSON.stringify(assets));}
-function selectAsset(id){selectedAssetId=id;el("editDataBtn").disabled=!id;el("editGeometryBtn").disabled=!id||!!editLayer;}
+function selectAsset(id){
+  selectedAssetId=id;
+  const asset=assets.find(f=>f.properties?.id===id);
+  const multi=asset?.geometry?.type==="MultiPolygon";
+  el("editDataBtn").disabled=!asset||!!editLayer;
+  el("editGeometryBtn").disabled=!asset||multi||!!editLayer;
+  el("editGeometryBtn").title=multi?"MultiPolygon has multiple parts: edit the source CAD/GIS and re-import the reviewed geometry.":"Edit a single polygon's vertices.";
+}
 function renderAssets(){
   const status=el("statusFilter").value,type=el("typeFilter").value;
   const filtered=assets.filter(f=>(status==="ALL"||f.properties.status===status)&&(type==="ALL"||f.properties.asset_type===type));
@@ -81,6 +88,7 @@ function updateStats(){const count=s=>assets.filter(f=>f.properties.status===s).
 function openSelectedAssetForm(){const f=assets.find(x=>x.properties.id===selectedAssetId);if(!f)return;const p=f.properties;el("assetId").value=p.id;el("assetCode").value=p.code||"";el("assetType").value=p.asset_type||"LAND";el("assetTitle").value=p.title||"";el("assetStatus").value=p.status||"UNVERIFIED";el("assetPrice").value=p.price_idr||"";el("assetArea").value=p.area_m2||"";el("assetSource").value=p.source||"";el("assetNotes").value=p.notes||"";showModal("Edit Asset Data");}
 function startGeometryEdit(){
   const f=assets.find(x=>x.properties.id===selectedAssetId);if(!f)return;
+  if(f.geometry.type==="MultiPolygon"){el("importFeedback").textContent="MultiPolygon editing is disabled. Edit CAD/GIS source and re-import.";return;}
   cancelGeometryEdit();originalEditGeometry=JSON.parse(JSON.stringify(f.geometry));assetLayer.clearLayers();
   editLayer=L.geoJSON(f,{style:getStyle(f.properties.status)}).getLayers()[0];editableGroup.addLayer(editLayer);
   if(editLayer.editing) editLayer.editing.enable();
@@ -94,16 +102,21 @@ function saveGeometryEdit(){
   saveAssets();finishGeometryEdit();renderAssets();selectAsset(selectedAssetId);
 }
 function cancelGeometryEdit(){if(editLayer&&selectedAssetId&&originalEditGeometry){const i=assets.findIndex(f=>f.properties.id===selectedAssetId);if(i>=0)assets[i].geometry=originalEditGeometry;}finishGeometryEdit();if(selectedAssetId)selectAsset(selectedAssetId);renderAssets();}
-function finishGeometryEdit(){if(editLayer){if(editLayer.editing)editLayer.editing.disable();editableGroup.removeLayer(editLayer);}editLayer=null;originalEditGeometry=null;el("saveGeometryBtn").disabled=true;el("cancelGeometryBtn").disabled=true;el("editDataBtn").disabled=!selectedAssetId;el("editGeometryBtn").disabled=!selectedAssetId;}
+function finishGeometryEdit(){if(editLayer){if(editLayer.editing)editLayer.editing.disable();editableGroup.removeLayer(editLayer);}editLayer=null;originalEditGeometry=null;el("saveGeometryBtn").disabled=true;el("cancelGeometryBtn").disabled=true;el("editDataBtn").disabled=!selectedAssetId;el("editGeometryBtn").disabled=!selectedAssetId;selectAsset(selectedAssetId);}
 function readFormProperties(id){return{id,code:el("assetCode").value.trim(),title:el("assetTitle").value.trim(),asset_type:el("assetType").value,status:el("assetStatus").value,price_idr:Number(el("assetPrice").value||0),area_m2:Number(el("assetArea").value||0),source:el("assetSource").value.trim(),notes:el("assetNotes").value.trim()};}
 function cancelForm(){if(pendingLayer){editableGroup.removeLayer(pendingLayer);pendingLayer=null;}hideModal();el("assetForm").reset();}
 function showModal(title){el("modalTitle").textContent=title;el("assetModal").classList.remove("hidden");el("assetModal").setAttribute("aria-hidden","false");}
 function hideModal(){el("assetModal").classList.add("hidden");el("assetModal").setAttribute("aria-hidden","true");}
 function calculateLayerArea(layer){return polygonAreaSquareMeters(layer.toGeoJSON().geometry);}
 function polygonAreaSquareMeters(geometry){
-  if(!geometry||geometry.type!=="Polygon"||!Array.isArray(geometry.coordinates)||!geometry.coordinates.length)return 0;
-  const areas=geometry.coordinates.map(ring=>L.GeometryUtil.geodesicArea(ring.map(([lon,lat])=>L.latLng(lat,lon))));
-  return Math.max(0,areas[0]-areas.slice(1).reduce((a,b)=>a+b,0));
+  if(!geometry || !["Polygon","MultiPolygon"].includes(geometry.type))return 0;
+  const polygons=geometry.type==="Polygon"?[geometry.coordinates]:geometry.coordinates;
+  if(!Array.isArray(polygons)||!polygons.length)return 0;
+  return polygons.reduce((sum,rings)=>{
+    if(!Array.isArray(rings)||!rings.length)return sum;
+    const areas=rings.map(ring=>L.GeometryUtil.geodesicArea(ring.map(([lon,lat])=>L.latLng(lat,lon))));
+    return sum+Math.max(0,areas[0]-areas.slice(1).reduce((a,b)=>a+b,0));
+  },0);
 }
 function extractOuterRingLatLngs(layer){const a=layer.getLatLngs();if(!Array.isArray(a))return[];if(a.length&&a[0] instanceof L.LatLng)return a;if(a.length&&Array.isArray(a[0]))return a[0];return[];}
 function nextSuggestedCode(){return `TGM-LAND-${String(assets.length+1).padStart(3,"0")}`;}
@@ -125,15 +138,25 @@ async function importGeoJsonFile(event){
     if(payload.features.length>5000)throw new Error("Import limit: 5,000 parcels at a time.");
     // The 3 hardcoded demonstration parcels are not part of any survey dataset.
     const hasRealAssets=assets.some(f=>!String(f.properties?.id||"").startsWith("demo-"));
-    const base=hasRealAssets?assets:[];
+    const importMode=el("importMode").value;
+    if(importMode==="REPLACE"&&hasRealAssets&&!window.confirm(
+      "Replace all current locally stored parcels with the imported GeoJSON? Export a backup first."
+    )){
+      feedback.textContent="Import cancelled; existing parcels were not modified.";
+      return;
+    }
+    const base=importMode==="APPEND"&&hasRealAssets?assets:[];
     const codes=new Set(base.map(f=>String(f.properties?.code||"").toLowerCase()));
     const ids=new Set(base.map(f=>String(f.properties?.id||"")));
     const imported=payload.features.map((feature,index)=>{
-      if(feature.type!=="Feature"||feature.geometry?.type!=="Polygon")
-        throw new Error(`Feature ${index+1} must be a Polygon Feature.`);
-      const rings=feature.geometry.coordinates;
-      if(!Array.isArray(rings)||!rings.length)throw new Error(`Feature ${index+1} has no rings.`);
-      for(const ring of rings){
+      if(feature.type!=="Feature"||!["Polygon","MultiPolygon"].includes(feature.geometry?.type))
+        throw new Error(`Feature ${index+1} must be Polygon or MultiPolygon.`);
+      const polygons=feature.geometry.type==="Polygon"?
+        [feature.geometry.coordinates]:feature.geometry.coordinates;
+      if(!Array.isArray(polygons)||!polygons.length)throw new Error(`Feature ${index+1} has no polygons.`);
+      for(const rings of polygons){
+        if(!Array.isArray(rings)||!rings.length)throw new Error(`Feature ${index+1} has an empty polygon.`);
+        for(const ring of rings){
         if(!Array.isArray(ring)||ring.length<4)throw new Error(`Feature ${index+1} has a short ring.`);
         for(const p of ring){
           if(!Array.isArray(p)||p.length<2||!Number.isFinite(p[0])||!Number.isFinite(p[1])||
@@ -142,6 +165,7 @@ async function importGeoJsonFile(event){
         }
         const a=ring[0],b=ring[ring.length-1];
         if(a[0]!==b[0]||a[1]!==b[1])throw new Error(`Feature ${index+1} ring is not closed.`);
+        }
       }
       const area=polygonAreaSquareMeters(feature.geometry);
       if(!Number.isFinite(area)||area<=0)throw new Error(`Feature ${index+1} has zero/invalid area.`);
@@ -161,7 +185,7 @@ async function importGeoJsonFile(event){
     const next=base.concat(imported);
     localStorage.setItem(STORAGE_KEY,JSON.stringify(next));
     assets=next;selectAsset(null);renderAssets();fitAll();
-    feedback.textContent=`Imported ${imported.length} parcels locally. Verify boundaries/CRS; not synced to Supabase.`;
+    feedback.textContent=`Imported ${imported.length} area/asset records (${imported.filter(x=>x.geometry.type==="MultiPolygon").length} MultiPolygon). Locally stored; not synced to Supabase.`;
   }catch(error){
     feedback.textContent=`Import rejected: ${error.message}`;
   }finally{
